@@ -8,9 +8,10 @@ public class Processo {
     private final int prioridade;
 
     // Atributos de Controle
-    private StatusProcesso status; // ALTERADO: O tipo da variável 'status' agora é StatusProcesso
+    private StatusProcesso status;
 
     // Atributos para Métricas
+    private int bilhetes;
     private int tempoRestante;
     private int tempoConclusao;
     private int tempoRetorno;
@@ -22,7 +23,7 @@ public class Processo {
         this.tempoExecucao = tempoExecucao;
         this.prioridade = prioridade;
         this.tempoRestante = this.tempoExecucao;
-        this.status = StatusProcesso.NAO_CHEGOU; // ALTERADO: O valor inicial agora vem de StatusProcesso.NAO_CHEGOU
+        this.status = StatusProcesso.NAO_CHEGOU;
     }
 
     // --- Getters e Setters ---
@@ -39,12 +40,14 @@ public class Processo {
     public int getTempoEspera() { return tempoEspera; }
     public void setTempoEspera(int tempoEspera) { this.tempoEspera = tempoEspera; }
     public int getPrioridade(){return prioridade; }
+    public int getBilhetes() { return bilhetes; }
+    public void setBilhetes(int bilhetes) { this.bilhetes = bilhetes; }
 
     public StatusProcesso getStatus() { // ALTERADO: O tipo de retorno do getter
         return status;
     }
 
-    public void setStatus(StatusProcesso status) { // ALTERADO: O tipo do parâmetro do setter
+    public void setStatus(StatusProcesso status) {
         this.status = status;
     }
 

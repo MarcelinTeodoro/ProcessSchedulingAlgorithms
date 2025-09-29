@@ -1,0 +1,90 @@
+Resultados para o algoritmo: FCFS
+Ordem de Execução: P1 → P2 → P3 → P4 → P5
+Processo   Tempo de Espera   Tempo de Retorno 
+--------------------------------------------------------------------------
+P1         0                 5                
+P2         3                 6                
+P3         4                 12               
+P4         11                17               
+P5         11                19               
+--------------------------------------------------------------------------
+Tempo Médio de Espera: 5,80
+Tempo Médio de Retorno: 11,80
+
+-------
+
+Resultados para o algoritmo: SJF (Não-Preemptivo)
+Ordem de Execução: P1 → P2 → P4 → P3 → P5
+Processo   Tempo de Espera   Tempo de Retorno 
+--------------------------------------------------------------------------
+P1         0                 5                
+P2         3                 6                
+P3         10                18               
+P4         3                 9                
+P5         11                19               
+--------------------------------------------------------------------------
+Tempo Médio de Espera: 5,40
+Tempo Médio de Retorno: 11,40
+
+-------
+
+Resultados para o algoritmo: Round Robin (Q=4)
+Ordem de Execução: P1 → P2 → P1 → P3 → P4 → P5 → P3 → P4 → P5
+Processo   Tempo de Espera   Tempo de Retorno 
+--------------------------------------------------------------------------
+P1         3                 8                
+P2         2                 5                
+P3         12                20               
+P4         15                21               
+P5         11                19               
+--------------------------------------------------------------------------
+Tempo Médio de Espera: 8,60
+Tempo Médio de Retorno: 14,60
+
+-------
+
+Resultados para o algoritmo: Prioridade (Não-Preemptivo)
+Ordem de Execução: P1 → P2 → P4 → P5 → P3
+Processo   Tempo de Espera   Tempo de Retorno  Prioridade  
+--------------------------------------------------------------------------
+P1         0                 5                 2           
+P2         3                 6                 1           
+P3         18                26                3           
+P4         3                 9                 2           
+P5         3                 11                1           
+--------------------------------------------------------------------------
+Tempo Médio de Espera: 5,40
+Tempo Médio de Retorno: 11,40
+
+-------
+
+Resultados para o algoritmo: Múltiplas Filas (Prio 1 = RR, Demais = FCFS)
+Ordem de Execução: P1 → P2 → P4 → P5 → P3
+Processo   Tempo de Espera   Tempo de Retorno  Prioridade  
+--------------------------------------------------------------------------
+P1         0                 5                 2           
+P2         3                 6                 1           
+P3         18                26                3           
+P4         3                 9                 2           
+P5         3                 11                1           
+--------------------------------------------------------------------------
+Tempo Médio de Espera: 5,40
+Tempo Médio de Retorno: 11,40
+
+-------
+
+Resultados para o algoritmo: Loteria (Preemptivo)
+Ordem de Execução: P1 → P2 → P3 → P4 → P3 → P4 → P5 → P4 → P1 → P3
+Processo   Tempo de Espera   Tempo de Retorno  Prioridade   Nº Bilhetes 
+--------------------------------------------------------------------------
+P1         21                26                2            4           
+P2         1                 4                 1            5           
+P3         18                26                3            3           
+P4         13                19                2            4           
+P5         3                 11                1            5           
+--------------------------------------------------------------------------
+Tempo Médio de Espera: 11,20
+Tempo Médio de Retorno: 17,20
+
+-------
+

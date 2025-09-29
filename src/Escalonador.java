@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class Escalonador {
-    // ... (variáveis idênticas às anteriores)
+    // --- Variáveis de Instância ---
     private final List<Processo> processosDeEntrada;
     private final List<Processo> filaDeProntos;
     private final List<Processo> processosFinalizados;
@@ -16,99 +16,46 @@ public class Escalonador {
     private Processo processoEmExecucao;
     private final AlgoritmoEscalonador estrategia;
     private final String nomeAlgoritmo;
-
-    // --- NOVO: Variáveis para Round Robin ---
     private final int quantum;
+    private final PreempcaoStrategy politicaPreempcao;
     private int fatiasDeTempoExecutadas;
 
-    // ALTERADO: Construtor agora aceita um quantum.
-    public Escalonador(List<Processo> processos, AlgoritmoEscalonador estrategia, String nomeAlgoritmo, int quantum) {
+
+
+    public Escalonador(List<Processo> processos, AlgoritmoEscalonador estrategia, String nomeAlgoritmo, int quantum, PreempcaoStrategy politicaPreempcao) {
         this.processosDeEntrada = new ArrayList<>(processos);
         this.processosDeEntrada.sort(Comparator.comparingInt(Processo::getTempoChegada));
-
         this.filaDeProntos = new ArrayList<>();
         this.processosFinalizados = new ArrayList<>();
         this.ordemDeExecucao = new ArrayList<>();
         this.totalProcessos = processos.size();
         this.tempoAtual = 0;
         this.processoEmExecucao = null;
-
         this.estrategia = estrategia;
         this.nomeAlgoritmo = nomeAlgoritmo;
-
-        // NOVO: Inicialização das variáveis do RR
         this.quantum = quantum;
+        this.politicaPreempcao = politicaPreempcao;
         this.fatiasDeTempoExecutadas = 0;
     }
 
-    /**
-     * Executa a simulação completa, do tempo 0 até o término de todos os processos.
-     * Este método orquestra a chegada de processos, a seleção via estratégia, a execução
-     * com lógica de preempção (se aplicável) e a finalização.
-     *
-     * @param writer O objeto Writer para onde os resultados finais serão escritos.
-     * @throws IOException Se ocorrer um erro durante a escrita no arquivo.
-     */
     public void executar(Writer writer) throws IOException {
-        // 1. Mensagem inicial para feedback no console.
         System.out.println("--- Executando simulação com o algoritmo: " + this.nomeAlgoritmo + " ---");
 
-        // 2. O loop principal da simulação. Continua enquanto houver processos a serem finalizados.
         while (processosFinalizados.size() < totalProcessos) {
 
-            // 3. Verifica se algum processo novo chegou no tempo atual e o coloca na fila de prontos.
             verificarNovasChegadas();
-
-            // 4. LÓGICA DE DECISÃO: Executada apenas se a CPU estiver ociosa.
-            if (processoEmExecucao == null) {
-                // Delega a decisão de qual processo escolher para a estratégia injetada (Strategy Pattern).
-                Processo proximoProcesso = estrategia.selecionarProximoProcesso(filaDeProntos);
-
-                // Se uma estratégia encontrou um processo válido...
-                if (proximoProcesso != null) {
-                    processoEmExecucao = proximoProcesso;
-                    filaDeProntos.remove(proximoProcesso);
-                    processoEmExecucao.setStatus(StatusProcesso.EXECUTANDO);
-
-                    // Lógica para adicionar o processo à ordem de execução (evita duplicatas seguidas no log do RR).
-                    if (ordemDeExecucao.isEmpty() || !ordemDeExecucao.get(ordemDeExecucao.size()-1).equals("P" + processoEmExecucao.getId())) {
-                        ordemDeExecucao.add("P" + processoEmExecucao.getId());
-                    }
-                }
-            }
-
-            // 5. LÓGICA DE EXECUÇÃO: Executada se a CPU estiver ocupada com um processo.
-            if (processoEmExecucao != null) {
-                // Decrementa o tempo restante do processo.
-                processoEmExecucao.setTempoRestante(processoEmExecucao.getTempoRestante() - 1);
-                // Incrementa o contador da fatia de tempo (para o Round Robin).
-                fatiasDeTempoExecutadas++;
-
-                // CASO 5.1: O processo TERMINOU sua execução (tempo restante chegou a zero).
-                if (processoEmExecucao.getTempoRestante() == 0) {
-                    finalizarProcessoAtual();
-                    fatiasDeTempoExecutadas = 0; // Zera o contador para o próximo processo.
-                }
-                // CASO 5.2: O processo NÃO terminou, mas seu QUANTUM ACABOU.
-                // A verificação "quantum > 0" garante que esta lógica SÓ rode para algoritmos preemptivos.
-                else if (quantum > 0 && fatiasDeTempoExecutadas >= quantum) {
-                    System.out.println("Tempo " + (tempoAtual+1) + ": Processo " + processoEmExecucao.getId() + " sofreu preempção (quantum esgotado).");
-                    processoEmExecucao.setStatus(StatusProcesso.PRONTO);
-                    filaDeProntos.add(processoEmExecucao); // Devolve o processo para o FIM da fila de prontos.
-                    processoEmExecucao = null; // Libera a CPU.
-                    fatiasDeTempoExecutadas = 0; // Zera o contador.
-                }
-            }
-
-            // 6. O clock da simulação avança uma unidade de tempo.
+            gerenciarSelecaoDeProcesso();
+            executarCicloDoProcessoAtual();
             tempoAtual++;
         }
 
-        // 7. Após o fim do loop, chama o método para gravar os resultados no arquivo.
         imprimirResultados(writer);
     }
 
-    // ... (O restante da classe Escalonador permanece igual)
+    /**
+     * Verifica a lista de processos de entrada e move para a fila de prontos
+     * aqueles cujo tempo de chegada é menor ou igual ao tempo atual.
+     */
     private void verificarNovasChegadas() {
         List<Processo> processosQueChegaram = processosDeEntrada.stream()
                 .filter(p -> p.getTempoChegada() <= tempoAtual)
@@ -120,6 +67,78 @@ public class Escalonador {
         }
         processosDeEntrada.removeAll(processosQueChegaram);
     }
+
+
+
+    /**
+     * Se a CPU estiver ociosa, tenta selecionar um novo processo usando a estratégia definida.
+     */
+    private void gerenciarSelecaoDeProcesso() {
+        if (processoEmExecucao == null) {
+            Processo proximoProcesso = estrategia.selecionarProximoProcesso(filaDeProntos);
+            if (proximoProcesso != null) {
+                processoEmExecucao = proximoProcesso;
+                filaDeProntos.remove(proximoProcesso);
+                processoEmExecucao.setStatus(StatusProcesso.EXECUTANDO);
+                if (ordemDeExecucao.isEmpty() || !ordemDeExecucao.get(ordemDeExecucao.size() - 1).equals("P" + processoEmExecucao.getId())) {
+                    ordemDeExecucao.add("P" + processoEmExecucao.getId());
+                }
+            }
+        }
+    }
+
+    private void executarCicloDoProcessoAtual() {
+        if (processoEmExecucao == null) {
+            return; // Nada a fazer se a CPU está ociosa
+        }
+
+        processoEmExecucao.setTempoRestante(processoEmExecucao.getTempoRestante() - 1);
+        fatiasDeTempoExecutadas++;
+
+        // Caso 1: O processo terminou sua execução.
+        if (processoEmExecucao.getTempoRestante() == 0) {
+            finalizarProcessoAtual();
+            // Resetar fatias de tempo, pois um novo processo será escolhido.
+            fatiasDeTempoExecutadas = 0;
+        }
+        // Caso 2: A política de preempção decide que o processo deve ser interrompido.
+        else if (politicaPreempcao.devePreemptar(this)) {
+            sofrerPreempcao();
+        }
+    }
+
+    /**
+     * Lida com a preempção de um processo, devolvendo-o para a fila de prontos.
+     */
+    private void sofrerPreempcao() {
+        System.out.println("Tempo " + (tempoAtual + 1) + ": Processo " + processoEmExecucao.getId() + " sofreu preempção (quantum esgotado).");
+        processoEmExecucao.setStatus(StatusProcesso.PRONTO);
+        filaDeProntos.add(processoEmExecucao);
+        processoEmExecucao = null;
+        fatiasDeTempoExecutadas = 0;
+    }
+
+
+    public int getTempoAtual() {
+        return this.tempoAtual;
+    }
+    public int getQuantum() {
+        return this.quantum;
+    }
+
+    public int getFatiasDeTempoExecutadas() {
+        return this.fatiasDeTempoExecutadas;
+    }
+
+    public Processo getProcessoEmExecucao() {
+        return this.processoEmExecucao;
+    }
+
+    public List<Processo> getFilaDeProntos() {
+        return this.filaDeProntos;
+    }
+
+
 
     /**
      * Finaliza o processo atualmente em execução, calcula suas métricas
@@ -140,43 +159,87 @@ public class Escalonador {
         processoEmExecucao = null; // Libera a CPU
     }
 
+
     /**
-     * CORRIGIDO: Imprime os resultados formatados, com a Prioridade como última coluna.
-     * @param writer O objeto Writer para onde a saída será direcionada.
-     * @throws IOException Se ocorrer um erro durante a escrita no arquivo.
+     * Método principal refatorado. Agora ele apenas coordena as chamadas
+     * para os métodos auxiliares de impressão.
      */
     private void imprimirResultados(Writer writer) throws IOException {
         processosFinalizados.sort(Comparator.comparingInt(Processo::getId));
 
-        double somaTempoRetorno = 0;
-        double somaTempoEspera = 0;
+        boolean isLoteria = this.nomeAlgoritmo.contains("Loteria");
+        boolean usaPrioridade = this.nomeAlgoritmo.contains("Prioridade") ||
+                this.nomeAlgoritmo.contains("Múltiplas Filas") ||
+                isLoteria;
 
+        // 1. Imprime o cabeçalho
+        imprimirCabecalhoResultados(writer, isLoteria, usaPrioridade);
+
+        // 2. Imprime o corpo da tabela e retorna as somas dos tempos
+        double[] somas = imprimirCorpoTabelaResultados(writer, isLoteria, usaPrioridade);
+
+        // 3. Imprime o rodapé com as médias, usando as somas retornadas
+        imprimirRodapeResultados(writer, somas[0], somas[1]);
+
+        System.out.println("Resultados para '" + this.nomeAlgoritmo + "' foram gravados no arquivo.");
+    }
+
+
+    /**
+     * NOVO MÉTODO: Imprime a parte inicial dos resultados, incluindo o cabeçalho da tabela.
+     */
+    private void imprimirCabecalhoResultados(Writer writer, boolean isLoteria, boolean usaPrioridade) throws IOException {
         writer.write("Resultados para o algoritmo: " + this.nomeAlgoritmo + "\n");
         writer.write("Ordem de Execução: " + String.join(" → ", ordemDeExecucao) + "\n");
 
-        // ALTERADO: Ordem das colunas no cabeçalho
-        writer.write(String.format("%-10s %-17s %-17s %-12s\n",
-                "Processo", "Tempo de Espera", "Tempo de Retorno", "Prioridade"));
-        writer.write("--------------------------------------------------------------\n");
+        if (isLoteria) {
+            writer.write(String.format("%-10s %-17s %-17s %-12s %-12s\n",
+                    "Processo", "Tempo de Espera", "Tempo de Retorno", "Prioridade", "Nº Bilhetes"));
+        } else if (usaPrioridade) {
+            writer.write(String.format("%-10s %-17s %-17s %-12s\n",
+                    "Processo", "Tempo de Espera", "Tempo de Retorno", "Prioridade"));
+        } else {
+            writer.write(String.format("%-10s %-17s %-17s\n",
+                    "Processo", "Tempo de Espera", "Tempo de Retorno"));
+        }
+        writer.write("--------------------------------------------------------------------------\n");
+    }
+
+
+    /**
+     * NOVO MÉTODO: Itera sobre os processos, imprime cada linha da tabela e calcula as somas.
+     * @return Um array de double onde a posição 0 é a soma do tempo de espera e a posição 1 é a soma do tempo de retorno.
+     */
+    private double[] imprimirCorpoTabelaResultados(Writer writer, boolean isLoteria, boolean usaPrioridade) throws IOException {
+        double somaTempoEspera = 0;
+        double somaTempoRetorno = 0;
 
         for (Processo p : processosFinalizados) {
-            // ALTERADO: Ordem dos dados para corresponder ao novo cabeçalho
-            writer.write(String.format("P%-9d %-17d %-17d %-12d\n",
-                    p.getId(),
-                    p.getTempoEspera(),
-                    p.getTempoRetorno(),
-                    p.getPrioridade() // <<< MOVIMOS PARA O FINAL
-            ));
-            somaTempoRetorno += p.getTempoRetorno();
             somaTempoEspera += p.getTempoEspera();
-        }
+            somaTempoRetorno += p.getTempoRetorno();
 
-        writer.write("--------------------------------------------------------------\n");
+            if (isLoteria) {
+                writer.write(String.format("P%-9d %-17d %-17d %-12d %-12d\n",
+                        p.getId(), p.getTempoEspera(), p.getTempoRetorno(), p.getPrioridade(), p.getBilhetes()));
+            } else if (usaPrioridade) {
+                writer.write(String.format("P%-9d %-17d %-17d %-12d\n",
+                        p.getId(), p.getTempoEspera(), p.getTempoRetorno(), p.getPrioridade()));
+            } else {
+                writer.write(String.format("P%-9d %-17d %-17d\n",
+                        p.getId(), p.getTempoEspera(), p.getTempoRetorno()));
+            }
+        }
+        return new double[]{somaTempoEspera, somaTempoRetorno};
+    }
+
+
+    /**
+     * NOVO MÉTODO: Imprime a parte final dos resultados, com as médias calculadas.
+     */
+    private void imprimirRodapeResultados(Writer writer, double somaTempoEspera, double somaTempoRetorno) throws IOException {
+        writer.write("--------------------------------------------------------------------------\n");
         writer.write(String.format("Tempo Médio de Espera: %.2f\n", somaTempoEspera / totalProcessos));
         writer.write(String.format("Tempo Médio de Retorno: %.2f\n", somaTempoRetorno / totalProcessos));
-
         writer.write("\n-------\n\n");
-
-        System.out.println("Resultados para '" + this.nomeAlgoritmo + "' foram gravados no arquivo.");
     }
 }
